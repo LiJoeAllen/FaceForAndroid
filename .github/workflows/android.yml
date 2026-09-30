@@ -1,0 +1,35 @@
+name: android-build
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      # Versions pinned in face/sf/build.gradle.kts
+      - name: Install NDK and CMake
+        run: sdkmanager "ndk;27.0.12077973" "cmake;3.22.1"
+
+      - name: Build AAR (3 ABIs) + app + publish to Maven Local
+        run: |
+          ./gradlew :face:sf:assembleDebug :facemirror:assembleDebug :face:sf:publishToMavenLocal --console=plain --no-daemon
+
+      - name: Upload AAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: face-sf-debug-aar
+          path: face/sf/build/outputs/aar/*.aar

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/FaceAISDK_Android" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/FaceAntiSpoofingX6" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/FaceBoxes" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/FaceRecognizer6" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/FaceTracker6" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/Landmarker" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/OpenRoleZoo" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/PoseEstimator6" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/QualityAssessor3" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/SeetaAgePredictor" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/SeetaAuthorize" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/SeetaEyeStateDetector" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/SeetaGenderPredictor" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/SeetaMaskDetector" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/TenniS" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6Docs" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6JNI" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFaceTutorial" vcs="Git" />
+  </component>
+</project>

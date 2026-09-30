@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 面鉴 logo 前景：白色人脸轮廓 + 双眼点，青色扫描线横贯 —— 呼应相机页的人脸框视觉。
+     108×108 视口，全部元素落在中心 66dp 安全区内（最远点距圆心 27dp < 33dp）。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 人脸椭圆轮廓：中心 (54,53)，rx=21 ry=26 -->
+    <path
+        android:pathData="M33,53 a21,26 0 1,0 42,0 a21,26 0 1,0 -42,0 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5.8"
+        android:strokeLineCap="round" />
+
+    <!-- 扫描线：穿过人脸中线，青色取自相机页人脸框 #00E5FF -->
+    <path
+        android:pathData="M27,53 L81,53"
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="5.8"
+        android:strokeLineCap="round" />
+
+    <!-- 双眼点，位于扫描线上方 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M46,44 m-3.8,0 a3.8,3.8 0 1,0 7.6,0 a3.8,3.8 0 1,0 -7.6,0 M62,44 m-3.8,0 a3.8,3.8 0 1,0 7.6,0 a3.8,3.8 0 1,0 -7.6,0" />
+</vector>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SeetaFace6 Android bindings. Pure library: no activities, permissions or
+  resources of its own. Java API is the upstream com.seeta.sdk package (kept
+  verbatim so JNI symbol names stay valid); the Gradle namespace only controls
+  the generated R/BuildConfig packages.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

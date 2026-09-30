@@ -1,0 +1,16 @@
+[submodule "face/sf/third_party/SeetaFace6"]
+	path = face/sf/third_party/SeetaFace6
+	url = https://github.com/SeetaFace6Open/index.git
+[submodule "face/sf/third_party/SeetaFace6JNI"]
+	path = face/sf/third_party/SeetaFace6JNI
+	url = https://github.com/SeetaFace6Open/SeetaFace6JNI.git
+[submodule "face/sf/third_party/SeetaFace6Docs"]
+	path = face/sf/third_party/SeetaFace6Docs
+	url = https://github.com/seetafaceengine/SeetaFace6.git
+[submodule "face/sf/third_party/SeetaFaceTutorial"]
+	path = face/sf/third_party/SeetaFaceTutorial
+	url = https://github.com/seetafaceengine/SeetaFaceTutorial.git
+[submodule "face/FaceAISDK_Android"]
+	path = face/FaceAISDK_Android
+	url = https://github.com/FaceAISDK/FaceAISDK_Android.git
+	branch = main

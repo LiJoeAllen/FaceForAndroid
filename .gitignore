@@ -1,0 +1,32 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+/.idea/deploymentTargetSelector.xml
+/.idea/markdown.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Local tooling state
+.zcode/
+.video_agent/
+.v2c/
+
+# Native build outputs in the face module
+/face/sf/.cxx
+/face/sf/.externalNativeBuild
+
+# SeetaFace6 models: hundreds of MB of binaries, fetched separately (see face/sf/README.md)
+facemirror/src/main/assets/seeta/
+
+# video2code contract archive (out/plan.md, verify.jsonl, report.md, evidence)
+/out/
