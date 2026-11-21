@@ -1,5 +1,9 @@
 pluginManagement {
     repositories {
+        // 国内加速：阿里云镜像优先，官方仓库兜底；镜像缺包时 Gradle 会自动继续尝试后面的仓库。
+        maven("https://maven.aliyun.com/repository/google")
+        maven("https://maven.aliyun.com/repository/gradle-plugin")
+        maven("https://maven.aliyun.com/repository/public")
         google {
             content {
                 includeGroupByRegex("com\\.android.*")
@@ -17,6 +21,9 @@ plugins {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        // 国内加速：阿里云镜像优先，官方仓库兜底；镜像缺包时 Gradle 会自动继续尝试后面的仓库。
+        maven("https://maven.aliyun.com/repository/google")
+        maven("https://maven.aliyun.com/repository/public")
         google()
         mavenCentral()
         // FaceSDKLib 的 FileOperator 依赖发布在 JitPack
@@ -58,9 +65,6 @@ dependencyResolutionManagement {
 rootProject.name = "Face"
 include(":facemirror")
 include(":face:sf")
-
-
-
 include(":faceai-demo")
 
 
