@@ -90,9 +90,9 @@ private const val TAG = "CameraAnalysisPreview"
  * CameraX 送达的帧数，渲染统计完整处理并显示的帧数，掉帧可定位到采集侧还是
  * 推理侧。
  *
- * [cameraRotation] 追加到 CameraX 的 rotationDegrees 上，只影响送检帧；
- * [viewRotation] 只旋转最终显示位图，不影响跟踪/识别；[mirrorFrontCamera]
- * 控制前置画面是否水平镜像。三者都实时生效。
+ * [cameraRotation] 追加到 CameraX 的 rotationDegrees 上，影响送检/标注帧
+ * （也是预览底图）；[viewRotation] 只旋转最终显示位图，不影响跟踪/识别；
+ * [mirrorFrontCamera] 控制前置画面是否水平镜像。三者都实时生效。
  *
  * [process] 在分析线程上执行，拿到的是摆正后（前置已镜像）的 ARGB 帧，
  * 返回标注好的位图用于显示。帧做了门控：上一帧还在处理时，新到的帧直接丢弃。

@@ -89,7 +89,7 @@ internal fun SettingsSheet(
                     )
                     RotationRow(
                         title = "相机方向",
-                        summary = "在 CameraX 自动方向基础上追加旋转，只影响送检帧；画面侧躺/倒置时逐档调整，实时生效",
+                        summary = "在 CameraX 自动方向基础上追加旋转，影响送检/标注帧（也是预览底图）；画面侧躺/倒置时逐档调整，实时生效",
                         value = settings.cameraRotation,
                         onChange = { onChange(settings.copy(cameraRotation = it)) },
                     )
