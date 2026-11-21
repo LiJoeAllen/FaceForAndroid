@@ -19,15 +19,28 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import cn.heavenlybook.facemirror.ui.CameraIcon
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -37,11 +50,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -68,9 +85,14 @@ private const val TAG = "CameraAnalysisPreview"
  *
  * 相机相关杂务全部收在这里：权限门、CameraX ImageAnalysis（360x480、
  * KEEP_ONLY_LATEST，跑在 16 MB 栈的分析线程上 —— TenniS/OpenMP 的 Debug 帧
- * 会撑爆约 1 MB 的 Java 线程栈）、严格顺序的资源释放、前后摄切换（前置画面
- * 做镜像以与预览一致），以及采集/渲染 FPS 角标 —— 采集统计 CameraX 送达的
- * 帧数，渲染统计完整处理并显示的帧数，掉帧可定位到采集侧还是推理侧。
+ * 会撑爆约 1 MB 的 Java 线程栈）、严格顺序的资源释放、前后摄切换、前置镜像
+ * 开关、送检帧/预览显示两级方向校正，以及采集/渲染 FPS 角标 —— 采集统计
+ * CameraX 送达的帧数，渲染统计完整处理并显示的帧数，掉帧可定位到采集侧还是
+ * 推理侧。
+ *
+ * [cameraRotation] 追加到 CameraX 的 rotationDegrees 上，只影响送检帧；
+ * [viewRotation] 只旋转最终显示位图，不影响跟踪/识别；[mirrorFrontCamera]
+ * 控制前置画面是否水平镜像。三者都实时生效。
  *
  * [process] 在分析线程上执行，拿到的是摆正后（前置已镜像）的 ARGB 帧，
  * 返回标注好的位图用于显示。帧做了门控：上一帧还在处理时，新到的帧直接丢弃。
@@ -79,6 +101,9 @@ private const val TAG = "CameraAnalysisPreview"
 internal fun CameraAnalysisPreview(
     modifier: Modifier = Modifier,
     initialFrontCamera: Boolean,
+    cameraRotation: Int,
+    viewRotation: Int,
+    mirrorFrontCamera: Boolean,
     onFacingChange: (Boolean) -> Unit,
     process: (Bitmap) -> Bitmap,
     onStatus: (String) -> Unit,
@@ -101,6 +126,30 @@ internal fun CameraAnalysisPreview(
     var fpsText by remember { mutableStateOf<String?>(null) }
     val captured = remember { AtomicLong(0) }
     val rendered = remember { AtomicLong(0) }
+
+    // 方向/镜像实时生效：分析线程每帧读取最新值，不必重建相机会话。
+    val currentCameraRotation = rememberUpdatedState(cameraRotation)
+    val currentViewRotation = rememberUpdatedState(viewRotation)
+    val currentMirrorFront = rememberUpdatedState(mirrorFrontCamera)
+
+    // 设置页切换前后摄时同步到本地状态；翻转按钮也会回写设置，二者保持一致。
+    LaunchedEffect(initialFrontCamera) {
+        if (frontCamera != initialFrontCamera) frontCamera = initialFrontCamera
+    }
+    LaunchedEffect(cameraRotation, viewRotation, mirrorFrontCamera, frontCamera) {
+        Log.i(
+            TAG,
+            "画面方向 cameraRotation=$cameraRotation viewRotation=$viewRotation " +
+                "mirror=${mirrorFrontCamera && frontCamera} facing=${if (frontCamera) "front" else "back"}",
+        )
+    }
+
+    // 视图方向转了 90/270 时，预览容器要跟着换成长宽比，否则画面会被裁掉。
+    val previewAspect = if (viewRotation % 180 == 0) {
+        ANALYSIS_W.toFloat() / ANALYSIS_H
+    } else {
+        ANALYSIS_H.toFloat() / ANALYSIS_W
+    }
 
     // 跨重组共享；onDispose 时按严格顺序拆除，保证分析线程绝不会碰到
     // 已被调用方关闭的跟踪器。
@@ -148,7 +197,7 @@ internal fun CameraAnalysisPreview(
         Column(
             modifier = modifier
                 .fillMaxWidth()
-                .aspectRatio(ANALYSIS_W.toFloat() / ANALYSIS_H)
+                .aspectRatio(previewAspect)
                 .padding(24.dp),
             verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -191,11 +240,17 @@ internal fun CameraAnalysisPreview(
                 // 画面与用户看到的预览一致；标注和识别都在这张图上进行。
                 // 缩放并入同一次绘制，产出恰好是分析分辨率，下游不再二次缩放。
                 val bitmap = proxy.toUprightBitmap(
-                    mirror = frontCamera,
+                    mirror = frontCamera && currentMirrorFront.value,
                     targetWidth = ANALYSIS_W,
                     targetHeight = ANALYSIS_H,
+                    extraRotation = currentCameraRotation.value,
                 )
-                annotated = process(bitmap)
+                val processed = process(bitmap)
+                annotated = if (currentViewRotation.value % 360 == 0) {
+                    processed
+                } else {
+                    processed.rotateForPreview(currentViewRotation.value)
+                }
                 rendered.incrementAndGet()
             } catch (e: Exception) {
                 Log.e(TAG, "帧处理异常 facing=${if (frontCamera) "front" else "back"}", e)
@@ -228,7 +283,7 @@ internal fun CameraAnalysisPreview(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .aspectRatio(ANALYSIS_W.toFloat() / ANALYSIS_H),
+            .aspectRatio(previewAspect),
     ) {
         annotated?.let {
             Image(
@@ -237,10 +292,7 @@ internal fun CameraAnalysisPreview(
                 contentScale = ContentScale.FillWidth,
                 modifier = Modifier.fillMaxSize(),
             )
-        } ?: Text(
-            "相机预热中…",
-            modifier = Modifier.align(Alignment.Center),
-        )
+        } ?: CameraWarmUp(modifier = Modifier.align(Alignment.Center))
         fpsText?.let {
             Surface(
                 color = Color.Black.copy(alpha = 0.45f),
@@ -275,19 +327,90 @@ internal fun CameraAnalysisPreview(
 }
 
 /**
+ * 相机预热占位：呼吸光环 + 相机图标 + 不确定进度，提示“正在启动”而不是死画面。
+ * 只做轻量动画，不参与帧处理，相机出帧后被标注画面替换。
+ */
+@Composable
+private fun CameraWarmUp(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "cameraWarmUp")
+    val pulse by transition.animateFloat(
+        initialValue = 0.86f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulse",
+    )
+    val glow by transition.animateFloat(
+        initialValue = 0.10f,
+        targetValue = 0.28f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "glow",
+    )
+    val iconAlpha by transition.animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "iconAlpha",
+    )
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(modifier = Modifier.size(72.dp), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .graphicsLayer {
+                        scaleX = pulse
+                        scaleY = pulse
+                    }
+                    .background(MiuixTheme.colorScheme.primary.copy(alpha = glow), CircleShape),
+            )
+            Image(
+                painter = rememberVectorPainter(CameraIcon),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.primary),
+                modifier = Modifier
+                    .size(36.dp)
+                    .graphicsLayer { alpha = iconAlpha },
+            )
+        }
+        CircularProgressIndicator(size = 20.dp)
+        Text(
+            "相机预热中…",
+            style = MiuixTheme.textStyles.footnote1,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        )
+    }
+}
+
+/**
  * 把 [ImageProxy] 一步解码为摆正（可同时镜像、缩放到目标尺寸）的 ARGB 位图：
  * 旋转与镜像共用同一个 [Matrix]，缩放通过画布变换并入同一次绘制 —— 每帧只
  * 产生一次全图像素拷贝。[targetWidth]/[targetHeight] 为 0 时保持摆正后的
  * 原始尺寸。
+ *
+ * [extraRotation] 是在 CameraX `rotationDegrees` 之上追加的校正角度，用于
+ * 个别设备传感器方向不准时手动调整送检帧。
  */
 internal fun ImageProxy.toUprightBitmap(
     mirror: Boolean,
     targetWidth: Int = 0,
     targetHeight: Int = 0,
+    extraRotation: Int = 0,
 ): Bitmap {
     val source = toBitmap()
     val matrix = Matrix()
-    val rotation = imageInfo.rotationDegrees
+    val rotation = (((imageInfo.rotationDegrees + extraRotation) % 360) + 360) % 360
     if (rotation != 0) matrix.postRotate(rotation.toFloat())
     if (mirror) matrix.postScale(-1f, 1f, source.width / 2f, source.height / 2f)
     if (targetWidth <= 0 || targetHeight <= 0) {
@@ -314,6 +437,17 @@ internal fun ImageProxy.toUprightBitmap(
     canvas.scale(fitX, fitY)
     canvas.drawBitmap(source, matrix, Paint(Paint.FILTER_BITMAP_FLAG))
     return scaled
+}
+
+/**
+ * 只旋转预览显示画面，不改变送入跟踪/识别的帧。返回新位图，调用方每帧
+ * 最多多一次 360x480 的像素拷贝；viewRotation=0 时直接复用原图。
+ */
+private fun Bitmap.rotateForPreview(degrees: Int): Bitmap {
+    val normalized = ((degrees % 360) + 360) % 360
+    if (normalized == 0) return this
+    val matrix = Matrix().apply { postRotate(normalized.toFloat()) }
+    return Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
 }
 
 /** 挂起获取 [ProcessCameraProvider]：把回调式的 Future 转成协程等待。 */

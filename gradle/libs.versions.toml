@@ -8,6 +8,8 @@ lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.13.0"
 kotlin = "2.2.10"
 composeBom = "2026.04.01"
+# miuix 0.9.4 使用 Kotlin 2.4 metadata，而 AGP 9.4.x/9.5.x 内置 Kotlin 2.2.10，
+# 直接升级会导致编译失败；升级 miuix 前需先切换 Kotlin 工具链。
 miuix = "0.9.1"
 camerax = "1.4.2"
 commonsCompress = "1.20"

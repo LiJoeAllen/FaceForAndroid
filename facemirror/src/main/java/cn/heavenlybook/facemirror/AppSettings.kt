@@ -10,14 +10,18 @@ import androidx.core.content.edit
  * 用户可调的产品设置，持久化在 `SharedPreferences`。
  *
  * 生效时机分三档：引擎构建参数（`minFaceSize`、`inferThreads`、`recognizerModel`）
- * 下次启动生效；相机侧参数（`frontCamera`、`videoFrameCount`、`videoStable`）
- * 下次打开相机 Tab 生效；阈值类立即生效。每个识别模型独立人脸库（特征只在
- * 同一模型内可比），切换模型不会销毁已注册数据。
+ * 下次启动生效；相机侧参数里的活体模式/帧数/防抖在下次打开相机 Tab 生效，
+ * 方向类（`cameraRotation`、`viewRotation`、`mirrorFrontCamera`）与前后摄切换实时生效；
+ * 阈值类立即生效。每个识别模型独立人脸库（特征只在同一模型内可比），
+ * 切换模型不会销毁已注册数据。
  */
 data class AppSettings(
     val verifyThreshold: Float = DEFAULT_VERIFY_THRESHOLD,
     val searchThreshold: Float = DEFAULT_SEARCH_THRESHOLD,
     val frontCamera: Boolean = false,
+    val cameraRotation: Int = DEFAULT_CAMERA_ROTATION,
+    val viewRotation: Int = DEFAULT_VIEW_ROTATION,
+    val mirrorFrontCamera: Boolean = DEFAULT_MIRROR_FRONT_CAMERA,
     val minFaceSize: Int = DEFAULT_MIN_FACE_SIZE,
     val videoFrameCount: Int = DEFAULT_VIDEO_FRAME_COUNT,
     val videoStable: Boolean = DEFAULT_VIDEO_STABLE,
@@ -31,6 +35,9 @@ data class AppSettings(
             putFloat(KEY_VERIFY_THRESHOLD, verifyThreshold)
                 .putFloat(KEY_SEARCH_THRESHOLD, searchThreshold)
                 .putBoolean(KEY_FRONT_CAMERA, frontCamera)
+                .putInt(KEY_CAMERA_ROTATION, cameraRotation)
+                .putInt(KEY_VIEW_ROTATION, viewRotation)
+                .putBoolean(KEY_MIRROR_FRONT_CAMERA, mirrorFrontCamera)
                 .putInt(KEY_MIN_FACE_SIZE, minFaceSize)
                 .putInt(KEY_VIDEO_FRAME_COUNT, videoFrameCount)
                 .putBoolean(KEY_VIDEO_STABLE, videoStable)
@@ -39,7 +46,7 @@ data class AppSettings(
                 .putFloat(KEY_LIVENESS_REALITY_THRESHOLD, livenessRealityThreshold)
                 .putString(KEY_LIVENESS_MODE, livenessMode)
         }
-        Log.d(TAG, "设置已保存 verify=$verifyThreshold search=$searchThreshold model=$recognizerModel")
+        Log.d(TAG, "设置已保存 verify=$verifyThreshold search=$searchThreshold model=$recognizerModel 相机方向=$cameraRotation 视图方向=$viewRotation")
     }
 
     companion object {
@@ -52,6 +59,27 @@ data class AppSettings(
 
         /** 跟踪框帧间平滑(上游 SetVideoStable):默认开启,压掉逐帧检测抖动。 */
         const val DEFAULT_VIDEO_STABLE = true
+
+        /** 相机方向额外旋转（在 CameraX rotationDegrees 之上追加，0/90/180/270）。 */
+        const val DEFAULT_CAMERA_ROTATION = 0
+
+        /** 预览显示额外旋转（只影响画布，不影响送检帧，0/90/180/270）。 */
+        const val DEFAULT_VIEW_ROTATION = 0
+
+        /** 前置摄像头默认水平镜像，符合“照镜子”的预览习惯。 */
+        const val DEFAULT_MIRROR_FRONT_CAMERA = true
+
+        /** 方向选项；设置页与取值归一化共用。 */
+        val ROTATION_OPTIONS = listOf(0, 90, 180, 270)
+
+        /** 把任意角度归一化到 0/90/180/270 中最接近的合法值。 */
+        fun normalizeRotation(degrees: Int): Int {
+            val normalized = ((degrees % 360) + 360) % 360
+            return ROTATION_OPTIONS.minByOrNull { option ->
+                val diff = kotlin.math.abs(option - normalized)
+                minOf(diff, 360 - diff)
+            } ?: 0
+        }
 
         /** 相机活体模式:静默(单帧,快) / 视频(多帧融合,稳但贵约 190ms/次)。 */
         const val LIVENESS_SILENT = "silent"
@@ -72,6 +100,9 @@ data class AppSettings(
         private const val KEY_VERIFY_THRESHOLD = "verify_threshold"
         private const val KEY_SEARCH_THRESHOLD = "search_threshold"
         private const val KEY_FRONT_CAMERA = "front_camera"
+        private const val KEY_CAMERA_ROTATION = "camera_rotation"
+        private const val KEY_VIEW_ROTATION = "view_rotation"
+        private const val KEY_MIRROR_FRONT_CAMERA = "mirror_front_camera"
         private const val KEY_MIN_FACE_SIZE = "min_face_size"
         private const val KEY_VIDEO_FRAME_COUNT = "video_frame_count"
         private const val KEY_VIDEO_STABLE = "video_stable"
@@ -86,6 +117,16 @@ data class AppSettings(
                 verifyThreshold = p.getFloat(KEY_VERIFY_THRESHOLD, DEFAULT_VERIFY_THRESHOLD),
                 searchThreshold = p.getFloat(KEY_SEARCH_THRESHOLD, DEFAULT_SEARCH_THRESHOLD),
                 frontCamera = p.getBoolean(KEY_FRONT_CAMERA, false),
+                cameraRotation = normalizeRotation(
+                    p.getInt(KEY_CAMERA_ROTATION, DEFAULT_CAMERA_ROTATION),
+                ),
+                viewRotation = normalizeRotation(
+                    p.getInt(KEY_VIEW_ROTATION, DEFAULT_VIEW_ROTATION),
+                ),
+                mirrorFrontCamera = p.getBoolean(
+                    KEY_MIRROR_FRONT_CAMERA,
+                    DEFAULT_MIRROR_FRONT_CAMERA,
+                ),
                 minFaceSize = p.getInt(KEY_MIN_FACE_SIZE, DEFAULT_MIN_FACE_SIZE),
                 videoFrameCount = p.getInt(KEY_VIDEO_FRAME_COUNT, DEFAULT_VIDEO_FRAME_COUNT),
                 videoStable = p.getBoolean(KEY_VIDEO_STABLE, DEFAULT_VIDEO_STABLE),
@@ -98,7 +139,7 @@ data class AppSettings(
                 ),
                 livenessMode = p.getString(KEY_LIVENESS_MODE, null) ?: DEFAULT_LIVENESS_MODE,
             ).also {
-                Log.d(TAG, "设置已加载 model=${it.recognizerModel} minFace=${it.minFaceSize} 前置相机=${it.frontCamera}")
+                Log.d(TAG, "设置已加载 model=${it.recognizerModel} minFace=${it.minFaceSize} 前置相机=${it.frontCamera} 相机方向=${it.cameraRotation} 视图方向=${it.viewRotation} 镜像=${it.mirrorFrontCamera}")
             }
         }
     }

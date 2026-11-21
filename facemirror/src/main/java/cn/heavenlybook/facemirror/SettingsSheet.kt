@@ -28,8 +28,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 
 /**
- * 产品设置弹层：1:1 / 1:N 相似度阈值、默认前后摄、最小可检人脸、识别模型、
- * 视频活体帧数等。[onChange] 回传更新后的值；持久化和引擎接线由调用方负责。
+ * 产品设置弹层：1:1 / 1:N 相似度阈值、默认前后摄、送检/预览方向、前置镜像、
+ * 最小可检人脸、识别模型、视频活体帧数等。[onChange] 回传更新后的值；
+ * 持久化和引擎接线由调用方负责。
  */
 @Composable
 internal fun SettingsSheet(
@@ -86,6 +87,24 @@ internal fun SettingsSheet(
                         checked = settings.frontCamera,
                         onChecked = { onChange(settings.copy(frontCamera = it)) },
                     )
+                    RotationRow(
+                        title = "相机方向",
+                        summary = "在 CameraX 自动方向基础上追加旋转，只影响送检帧；画面侧躺/倒置时逐档调整，实时生效",
+                        value = settings.cameraRotation,
+                        onChange = { onChange(settings.copy(cameraRotation = it)) },
+                    )
+                    RotationRow(
+                        title = "视图方向",
+                        summary = "只旋转预览显示，不影响检测/识别；用于预览方向与送检帧不一致时校正，实时生效",
+                        value = settings.viewRotation,
+                        onChange = { onChange(settings.copy(viewRotation = it)) },
+                    )
+                    SettingSwitchRow(
+                        title = "前置镜像",
+                        summary = "前置画面水平镜像，让预览与照镜子一致；关闭后预览和送检帧都不镜像",
+                        checked = settings.mirrorFrontCamera,
+                        onChecked = { onChange(settings.copy(mirrorFrontCamera = it)) },
+                    )
                     ThresholdSlider(
                         label = "最小可检人脸 (px)",
                         hint = "调大更快,太小的人脸会被忽略;重启应用后生效",
@@ -102,12 +121,7 @@ internal fun SettingsSheet(
                             selectedTabIndex = if (settings.livenessMode == AppSettings.LIVENESS_VIDEO) 1 else 0,
                             // 默认选中段底色 surfaceContainer 与卡片底色相同会融掉,
                             // 这里选中段用主色 + 反白字,在任何底色上都可辨。
-                            colors = TabRowDefaults.tabRowColors(
-                                backgroundColor = MiuixTheme.colorScheme.surface,
-                                contentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                selectedBackgroundColor = MiuixTheme.colorScheme.primary,
-                                selectedContentColor = MiuixTheme.colorScheme.onPrimary,
-                            ),
+                            colors = settingsTabRowColors(),
                             onTabSelected = { index ->
                                 onChange(
                                     settings.copy(
@@ -180,6 +194,42 @@ internal fun SettingsSheet(
                 }
             }
         }
+    }
+}
+
+/**
+ * 设置页统一的 TabRow 配色：选中段用主色 + 反白字，避免默认 surfaceContainer
+ * 与卡片底色相同而“融掉”。
+ */
+@Composable
+private fun settingsTabRowColors() = TabRowDefaults.tabRowColors(
+    backgroundColor = MiuixTheme.colorScheme.surface,
+    contentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+    selectedBackgroundColor = MiuixTheme.colorScheme.primary,
+    selectedContentColor = MiuixTheme.colorScheme.onPrimary,
+)
+
+/** 方向选择行：0°/90°/180°/270° 四档，实时生效。 */
+@Composable
+private fun RotationRow(
+    title: String,
+    summary: String,
+    value: Int,
+    onChange: (Int) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, style = MiuixTheme.textStyles.body1)
+        TabRow(
+            tabs = AppSettings.ROTATION_OPTIONS.map { "$it°" },
+            selectedTabIndex = AppSettings.ROTATION_OPTIONS.indexOf(value).coerceAtLeast(0),
+            colors = settingsTabRowColors(),
+            onTabSelected = { index -> onChange(AppSettings.ROTATION_OPTIONS[index]) },
+        )
+        Text(
+            summary,
+            style = MiuixTheme.textStyles.footnote1,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        )
     }
 }
 

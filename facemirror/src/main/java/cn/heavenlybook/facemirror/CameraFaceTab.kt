@@ -156,6 +156,9 @@ internal fun CameraTab(
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
         CameraAnalysisPreview(
             initialFrontCamera = settings.frontCamera,
+            cameraRotation = settings.cameraRotation,
+            viewRotation = settings.viewRotation,
+            mirrorFrontCamera = settings.mirrorFrontCamera,
             onFacingChange = onFacingChange,
             onStatus = { status = it },
             onMessage = onMessage,
