@@ -23,13 +23,12 @@
 ```
 facemirror/            面鉴 App（Kotlin + Compose/miuix）
 face/sf/               face-sf Android 库（AAR，含 JNI/CMake 编排）
-face/sf/third_party/   SeetaFace6 / SeetaFace6JNI 等上游 submodule
-faceai-demo/           独立的 FaceAISDK 对照演示（与面鉴互不相干）
+face/sf/third_party/   SeetaFace6 / SeetaFace6JNI 等 submodule（统一指向个人 fork）
 ```
 
 ## 构建要求
 
-- JDK 17（AGP 9.4.1 / Gradle 9.6 / Kotlin 2.2.10 / compileSdk 37）
+- JDK 17（AGP 9.4.1 / Gradle 9.9.1 / Kotlin 2.2.10 / compileSdk 37）
 - NDK `27.0.12077973` + CMake `3.22.1`（已在 `face/sf/build.gradle.kts` 钉选）
 - 首次拉取：`git submodule update --init --recursive`
 
@@ -51,5 +50,7 @@ SeetaFace6 的 `.csta` 模型（数百 MB 二进制）不进版本库。获取�
 
 ## 第三方组件
 
-SeetaFace6、SeetaFace6JNI、SeetaFaceTutorial、FaceAISDK_Android 均以 git submodule
-原样引入，各自的许可以其上游仓库为准；本仓库对上游不做任何修改。
+SeetaFace6、SeetaFace6JNI、SeetaFaceTutorial 等均以 git submodule 引入，统一指向
+本仓库维护者的 GitHub fork（`LiJoeAllen/*`），便于国内网络稳定拉取。fork 的代码内容与
+上游对应 commit 一致，仅 SeetaFace6 fork 的 `.gitmodules` 调整为指向各算法模块的 fork；
+各组件许可以其上游仓库为准。

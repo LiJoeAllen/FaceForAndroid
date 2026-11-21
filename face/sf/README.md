@@ -3,7 +3,8 @@
 `:face:sf` 把开源人脸识别引擎 [SeetaFace6](https://github.com/SeetaFace6Open/index)
 和官方 JNI 绑定 [SeetaFace6JNI](https://github.com/SeetaFace6Open/SeetaFace6JNI)
 打包成一个可直接依赖的 Android Library/AAR，按"可长期维护的优秀第三方库"标准组织：
-上游代码以 git submodule 原样保留、不打补丁，所有构建适配都在本模块内完成。
+上游代码以 git submodule 引入并统一指向本仓库维护者的 fork，代码本身不打补丁，
+所有构建适配都在本模块内完成。
 
 - **Maven 坐标**：`cn.heavenlybook.sf:face-sf:<version>`（当前 `6.0.0-alpha02`，见 `gradle/libs.versions.toml` 的 `seetaFace`）
 - **Java API 包名**：`com.seeta.sdk`（沿用上游，JNI 符号 `Java_com_seeta_sdk_*` 依赖此包名，**不可更改**）
@@ -28,22 +29,23 @@ face/sf/
     CMakeLists.txt                 # 原生构建总编排
     cmake/SeetaModules.cmake       # seeta_add_feature()/seeta_add_jni() 函数
     cmake/seeta_compat.h           # 现代 NDK 的标准头兼容（强制包含）
-  third_party/                     # 全部为 git submodule，禁止直接改动
-    SeetaFace6/      -> github.com/SeetaFace6Open/index.git（伞形仓库）
-      OpenRoleZoo/ SeetaAuthorize/ TenniS/ FaceBoxes/ ... 14 个上游子模块
-    SeetaFace6JNI/   -> github.com/SeetaFace6Open/SeetaFace6JNI.git
-    SeetaFace6Docs/  -> github.com/seetafaceengine/SeetaFace6.git（文档与示例）
-    SeetaFaceTutorial/ -> github.com/seetafaceengine/SeetaFaceTutorial.git（入门教程）
+  third_party/                     # 全部为 git submodule，统一指向维护者 fork
+    SeetaFace6/      -> github.com/LiJoeAllen/SeetaFace6.git（伞形仓库，fork 自 SeetaFace6Open/index）
+      OpenRoleZoo/ SeetaAuthorize/ TenniS/ FaceBoxes/ ... 14 个 fork 后的算法子模块
+    SeetaFace6JNI/   -> github.com/LiJoeAllen/SeetaFace6JNI.git
+    SeetaFace6Docs/  -> github.com/LiJoeAllen/SeetaFace6Docs.git（文档与示例，fork 自 seetafaceengine/SeetaFace6）
+    SeetaFaceTutorial/ -> github.com/LiJoeAllen/SeetaFaceTutorial.git（入门教程）
 ```
 
-根 `.gitmodules` 登记四个直接子模块；index 自带的 `.gitmodules` 保留 13 个组件仓库
-加 TenniS 的原始 URL 与官方钉选版本。
+根 `.gitmodules` 登记四个直接子模块；SeetaFace6 fork 的 `.gitmodules` 将 14 个算法
+子模块的 URL 一并改到对应 fork。各算法子模块的钉选 commit 与上游一致；SeetaFace6
+因修改 `.gitmodules` 多出一个 fork 提交，其代码内容仍与上游 `a32e2fa` 一致。
 
 ## 当前钉选版本
 
 | 仓库 | commit |
 |---|---|
-| SeetaFace6 (index) | `a32e2faa0694c0f841ace4df9ead0407b78363c6` |
+| SeetaFace6 (index) | `bd0fef5c1c922371bcffa5055cf5c5a1b89d47b8`（基于上游 `a32e2fa`，仅改 `.gitmodules`） |
 | └ FaceBoxes | `6e806443a2f4dfbd9b9c446a03bc33250ee254b7` |
 | └ FaceRecognizer6 | `c3bd558700e35e7a93437d55ebe342e83579ce6a` |
 | └ FaceAntiSpoofingX6 | `f64b6c2faad79314a659e1e9d066b84938768d35` |

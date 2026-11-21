@@ -2,7 +2,6 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/face/FaceAISDK_Android" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/FaceAntiSpoofingX6" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/face/sf/third_party/SeetaFace6/FaceBoxes" vcs="Git" />
