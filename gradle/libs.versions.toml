@@ -1,19 +1,20 @@
 [versions]
-agp = "9.4.1"
+agp = "9.5.1"
 coreKtx = "1.19.0"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
 lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.13.0"
-kotlin = "2.2.10"
-composeBom = "2026.04.01"
-# miuix 0.9.4 使用 Kotlin 2.4 metadata，而 AGP 9.4.x/9.5.x 内置 Kotlin 2.2.10，
-# 直接升级会导致编译失败；升级 miuix 前需先切换 Kotlin 工具链。
-miuix = "0.9.1"
+kotlin = "2.3.21"
+composeBom = "2026.09.00"
+miuix = "0.9.4"
 camerax = "1.4.2"
+# 1.21+ 的 IOUtils 在 <clinit> 引用 java.nio.file（API 26），minSdk 24 会
+# NoClassDefFoundError；1.20 是最后一个兼容 Android 7 的版本。
+# 若确认放弃 Android 7（minSdk 提到 26），可再升级到 1.28。
 commonsCompress = "1.20"
-xz = "1.9"
+xz = "1.12"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

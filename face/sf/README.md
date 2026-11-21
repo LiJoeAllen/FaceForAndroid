@@ -142,7 +142,7 @@ app/src/main/assets/seeta/
 > }
 > ```
 >
-> 解压依赖 `commons-compress 1.20` + `xz 1.9`（纯 Java，随 AAR 依赖传递）。
+> 解压依赖 `commons-compress 1.20` + `xz 1.12`（纯 Java，随 AAR 依赖传递）。
 > 1.20 是最后一个兼容 Android 7（API 24）的版本；1.21+ 的 `IOUtils` 会在
 > 类初始化时引用 `java.nio.file`，在 Android 7 上直接 `NoClassDefFoundError`。
 

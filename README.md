@@ -29,7 +29,7 @@ face/sf/third_party/   SeetaFace6 / SeetaFace6JNI 等 submodule（统一指向�
 
 ## 构建要求
 
-- JDK 17（AGP 9.4.1 / Gradle 9.9.1 / Kotlin 2.2.10 / compileSdk 37）
+- JDK 17（AGP 9.5.1 / Gradle 9.9.1 / Kotlin 2.3.21 / compileSdk 37）
 - NDK `27.0.12077973` + CMake `3.22.1`（已在 `face/sf/build.gradle.kts` 钉选）
 - 首次拉取：`git submodule update --init --recursive`
 
