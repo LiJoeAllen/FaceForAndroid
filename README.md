@@ -40,8 +40,14 @@ git submodule update --init --recursive
 ## 模型文件
 
 SeetaFace6 的 `.csta` 模型（数百 MB 二进制）不进版本库。获取方式见
-[face/sf/README.md](face/sf/README.md)，放到 `facemirror/src/main/assets/seeta/`
-即可被打包；GitHub Release 的 APK 已内置模型，可直接安装体验。
+[face/sf/README.md](face/sf/README.md)。支持两种放置方式：
+
+- **目录**：`facemirror/src/main/assets/seeta/` 下直接放 `.csta` 文件，首次启动逐个复制；
+- **压缩包**：放一个 `facemirror/src/main/assets/seeta.7z`，首次启动自动解压到应用私有目录。
+
+应用启动时会自动探测 assets 里是目录还是 7z，并在初始化界面显示当前阶段、进度和耗时；
+已安装且压缩包未变化时直接复用，不会重复解压。7z 建议只使用 LZMA2 压缩，不要加密或使用
+BCJ2 过滤器。GitHub Release 的 APK 已内置模型，可直接安装体验。
 
 ## 隐私与安全约定
 

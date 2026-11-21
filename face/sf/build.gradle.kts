@@ -14,7 +14,6 @@ plugins {
 }
 
 group = "cn.heavenlybook.sf"
-version = libs.versions.seetaFace.get()
 
 /**
  * The upstream SeetaFace6JNI repository ships one copy of the shared data
@@ -145,6 +144,14 @@ androidComponents {
             MergeSeetaJniSources::outputDir,
         )
     }
+}
+
+dependencies {
+    // 7z 解压：纯 Java 实现，避免引入体积较大的原生 7z 库。
+    // 使用 SeekableByteChannel 构造器，避开 Android 26 才有的 java.nio.file API。
+    implementation(libs.commons.compress)
+    implementation(libs.xz)
+    testImplementation(libs.junit)
 }
 
 val sourcesJar = tasks.register<Jar>("sourcesJar") {

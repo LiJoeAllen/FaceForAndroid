@@ -5,6 +5,7 @@ package cn.heavenlybook.facemirror
 
 import android.util.Log
 import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -31,6 +32,33 @@ internal class FaceSdk(
     } else {
         Log.w(TAG, "识别模型 $recognizerModel 文件不存在，回退默认模型 ${AppSettings.DEFAULT_RECOGNIZER_MODEL}")
         AppSettings.DEFAULT_RECOGNIZER_MODEL
+    }
+
+    /**
+     * 本 Demo 的流水线实际会加载的模型。缺任何一个都在构造 native 引擎前
+     * 明确报错，避免底层只抛出难以定位的 JNI 异常。
+     */
+    private val requiredModels = listOf(
+        "face_detector.csta",
+        "face_landmarker_pts5.csta",
+        recognizer,
+        "fas_first.csta",
+        "fas_second.csta",
+        "age_predictor.csta",
+        "gender_predictor.csta",
+        "eye_state.csta",
+        "mask_detector.csta",
+    )
+
+    init {
+        val missing = requiredModels.filterNot { File(modelsDir, it).let { f -> f.isFile && f.length() > 0 } }
+        if (missing.isNotEmpty()) {
+            val message = "模型不完整，缺少：${missing.joinToString()}（目录：${modelsDir.path}）"
+            val error = IOException(message)
+            Log.e(TAG, message, error)
+            throw error
+        }
+        Log.i(TAG, "必需模型检查通过 count=${requiredModels.size}")
     }
 
     init {

@@ -37,6 +37,11 @@ android {
     buildFeatures {
         compose = true
     }
+    androidResources {
+        // seeta.7z 必须保持未压缩：AssetManager.openFd 才能给出可随机读取的
+        // 文件描述符，避免解压前先完整复制一份到 cache（模型包通常几百 MB）。
+        noCompress += "7z"
+    }
 }
 
 // ---------------------------------------------------------------------------

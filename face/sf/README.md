@@ -19,7 +19,10 @@ face/sf/
   consumer-rules.pro               # 随 AAR 下发的 R8 规则
   src/main/AndroidManifest.xml     # 纯库，无 Activity/权限/资源
   src/main/kotlin/cn/heavenlybook/sf/face/
-    SeetaFace.kt                   # 模型安装（assets -> 内部存储）
+    SeetaFace.kt                   # 模型安装（目录 / seeta.7z 自动解压）
+    ModelInstallProgress.kt        # 安装阶段与进度快照
+    ModelSource.kt                 # assets 模型来源探测
+    SevenZExtractor.kt             # 7z 解压（纯 JVM，支持偏移通道）
     SeetaImages.kt                 # Bitmap -> BGR SeetaImageData
     SeetaFacePipeline.kt           # 一站式管线：检测/关键点/识别/活体/属性
     SeetaFaceTracker.kt            # 视频流跟踪（人名 id）
@@ -104,8 +107,9 @@ SeetaImageData/SeetaModelSetting 等公共类副本；合并任务按 `package` 
 ### 方式一：Kotlin 门面（推荐，`cn.heavenlybook.sf.face` 包）
 
 模型文件（`.csta`）**不随 AAR 分发**，需从上游官方渠道（SeetaFace6 index 仓库 README
-中的百度网盘/Dropbox 链接）下载，放到宿主 App 的 **`app/src/main/assets/seeta/`**
-目录（`seeta` 目录名可自定义，与 `installModels` 参数对应）。按启用能力放置：
+中的百度网盘/Dropbox 链接）下载。宿主 App 支持两种放置方式，`installModels` 会自动探测：
+
+**方式 A：目录（开发期推荐）** `app/src/main/assets/seeta/`
 
 ```
 app/src/main/assets/seeta/
@@ -123,13 +127,35 @@ app/src/main/assets/seeta/
   face_landmarker_pts68.csta    # 68 点（quality_lbn 依赖）
 ```
 
-App 代码（首次运行会把 assets 里的模型拷贝到内部存储，SeetaFace 只能按路径加载）：
+**方式 B：单个 7z（发布包推荐）** `app/src/main/assets/seeta.7z`
+
+压缩包内 `.csta` 可以直接在根目录，也可以统一放在 `seeta/` 子目录。首次启动会解压到
+`filesDir/seeta/`，之后按标记文件跳过；压缩包更新（大小变化）会自动重新解压。
+
+> 7z 使用纯 Java 的 commons-compress 解码，建议只使用 **LZMA/LZMA2** 压缩，
+> 不要加密，也不要使用 BCJ2 过滤器。宿主 App 需保持 7z 资源未被 aapt 压缩，
+> 否则无法用 `openFd` 直接随机读取（会退化为先复制到 cache）：
+>
+> ```kotlin
+> android {
+>     androidResources { noCompress += "7z" }
+> }
+> ```
+>
+> 解压依赖 `commons-compress 1.20` + `xz 1.9`（纯 Java，随 AAR 依赖传递）。
+> 1.20 是最后一个兼容 Android 7（API 24）的版本；1.21+ 的 `IOUtils` 会在
+> 类初始化时引用 `java.nio.file`，在 Android 7 上直接 `NoClassDefFoundError`。
+
+App 代码（`installModels` 自动识别目录 / 7z，并回调安装进度）：
 
 ```kotlin
 import cn.heavenlybook.sf.face.SeetaFace
 import cn.heavenlybook.sf.face.SeetaFacePipeline
 
-val modelsDir = SeetaFace.installModels(context)          // assets/seeta -> filesDir/seeta
+// 目录与 seeta.7z 都适用；回调在 IO 线程触发，UI 层注意切主线程。
+val modelsDir = SeetaFace.installModels(context) { progress ->
+    Log.i("ModelInstall", "${progress.stage} ${progress.message} ${progress.fraction}")
+}
 SeetaFacePipeline.Builder(modelsDir)
     .withDetector(minFaceSize = 80)                       // 越大越快；默认 40；maxImageWidth/Height 可限制大图
     .withLandmarker()                                     // 识别/活体/属性的前置依赖
