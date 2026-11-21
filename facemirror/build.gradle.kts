@@ -1,5 +1,5 @@
 import java.net.HttpURLConnection
-import java.net.URL
+import java.net.URI
 import java.util.Base64
 
 plugins {
@@ -95,7 +95,7 @@ tasks.register("publishApkToGiteaRelease") {
             body: ByteArray? = null,
             contentType: String? = null,
         ): Pair<Int, ByteArray> {
-            val conn = URL(url).openConnection() as HttpURLConnection
+            val conn = URI.create(url).toURL().openConnection() as HttpURLConnection
             conn.requestMethod = method
             conn.setRequestProperty("Authorization", "Basic $auth")
             if (contentType != null) conn.setRequestProperty("Content-Type", contentType)
