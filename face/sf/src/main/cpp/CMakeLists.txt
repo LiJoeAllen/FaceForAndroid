@@ -21,6 +21,17 @@ project(seetaface6_android LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Android 15+ 设备可能启用 16 KB 内存页，动态链接器要求每个 PT_LOAD 段的
+# p_align 至少为 16 KB。NDK r27 默认仍按 4 KB 对齐，自建 .so 会因此无法在
+# 16 KB 设备上加载；NDK 自带的 64 位 libomp.so / libc++_shared.so 已经是
+# 16 KB，armeabi-v7a 版本仍是 4 KB（不影响 Play 的 64 位要求）。
+# NDK r28+ 已改为默认 16 KB，届时可删除这两行。common-page-size 一并设置，
+# 避免 COMMON 符号按 4 KB 对齐（官方 16 KB 适配文档要求两者都加）。
+add_link_options(
+    "LINKER:-z,max-page-size=16384"
+    "LINKER:-z,common-page-size=16384"
+)
+
 # face/sf/src/main/cpp -> face/sf
 get_filename_component(SF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
 set(SEETA6_DIR "${SF_DIR}/third_party/SeetaFace6")
@@ -156,10 +167,13 @@ if(ANDROID_ABI STREQUAL "arm64-v8a" OR ANDROID_ABI STREQUAL "armeabi-v7a")
     if(ANDROID_ABI STREQUAL "armeabi-v7a")
         target_compile_definitions(tennis PRIVATE TS_ON_ARMV7=ON)
     endif()
-    # NEON/SIMD kernels disabled for now: under NDK 27 the NEON paths corrupt
-    # the heap on-device (SIGSEGV in depthwise conv / resize); the generic C++
-    # kernels are slower but stable. Re-enable after verifying with NDK r16b
-    # or after patching upstream.
+    # NEON/SIMD kernels disabled: the upstream vector paths read past the
+    # tensor allocation on image edges. Verified on-device with NDK 27:
+    #   - depthwise_3x3_s1 -> simd_neon_def.h:78
+    #   - Pooling2D        -> simd_neon_def.h:275
+    # Both raise SIGSEGV (SEGV_ACCERR, read after secondary allocation) within
+    # seconds of opening the camera. Changing NDK does not fix the source OOB;
+    # keep the scalar kernels until upstream is patched.
     target_compile_definitions(tennis PRIVATE
         TS_ON_ARM=ON TS_USE_OPENMP=ON
     )

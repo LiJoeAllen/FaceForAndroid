@@ -26,7 +26,10 @@ jobs:
 
       - name: Build AAR (3 ABIs) + app + publish to Maven Local
         run: |
-          ./gradlew :face:sf:assembleDebug :facemirror:assembleDebug :face:sf:publishToMavenLocal --console=plain --no-daemon
+          ./gradlew :face:sf:assembleDebug :app:assembleDebug :face:sf:publishToMavenLocal --console=plain --no-daemon
+
+      - name: Check 16 KB page alignment
+        run: python3 face/sf/scripts/check_16k_alignment.py app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload AAR
         uses: actions/upload-artifact@v4

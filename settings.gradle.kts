@@ -57,5 +57,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Face"
-include(":facemirror")
+include(":app")
 include(":face:sf")

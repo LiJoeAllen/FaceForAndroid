@@ -162,6 +162,17 @@ internal class FaceSdk(
         // shutdown() 不打断在途推理，让正在跑的任务自然结束，避免强杀线程时
         // native 层（TenniS 内核）崩溃；新任务则不再接收。
         pool?.shutdown()
+        // 必须等在途任务退出后再释放 native 句柄：相机 Tab 的异步 1:N 检索就跑在
+        // 这个池上，若 Query 尚未返回就 database.close()，native 侧会释放句柄后
+        // 仍被查询线程访问（use-after-free）。3s 与相机线程的等待上限保持一致。
+        try {
+            if (pool != null && !pool.awaitTermination(3, java.util.concurrent.TimeUnit.SECONDS)) {
+                Log.w(TAG, "推理线程池 3s 内未退出，继续释放 native 句柄；在途任务可能失败")
+            }
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            Log.w(TAG, "等待推理线程池退出被中断，继续释放 native 句柄", e)
+        }
         pipeline.close()
         database.close()
         quality.close()

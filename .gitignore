@@ -26,8 +26,8 @@ local.properties
 /face/sf/.externalNativeBuild
 
 # SeetaFace6 models: hundreds of MB of binaries, fetched separately (see face/sf/README.md)
-facemirror/src/main/assets/seeta/
-facemirror/src/main/assets/seeta.7z
+app/src/main/assets/seeta/
+app/src/main/assets/seeta.7z
 
 # video2code contract archive (out/plan.md, verify.jsonl, report.md, evidence)
 /out/

@@ -47,7 +47,7 @@ android {
 // ---------------------------------------------------------------------------
 // Gitea Release 发布:构建 debug APK 并作为附件挂到仓库的版本发布页
 // (https://gitea.heavenlybook.cn/JoeAllen/FaceForAndroid/releases)。
-// 用法:./gradlew :facemirror:publishApkToGiteaRelease
+// 用法:./gradlew :app:publishApkToGiteaRelease
 //  - tag 取 versionName(v1.0),已存在则复用该 Release 并替换同名附件
 //  - release 构建无签名配置,不可直接安装,故发布 debug 包
 //  - 凭证:seeta.maven.user/seeta.maven.token 属性或 GITEA_USER/GITEA_TOKEN
@@ -66,7 +66,7 @@ tasks.register("publishApkToGiteaRelease") {
 
     // 配置缓存要求:doLast 闭包只能捕获可序列化值,git 推导/凭证全部在配置期完成。
     val apkPath = layout.projectDirectory
-        .file("build/outputs/apk/debug/facemirror-debug.apk").asFile.absolutePath
+        .file("build/outputs/apk/debug/app-debug.apk").asFile.absolutePath
     val remote = providers.exec {
         commandLine("git", "remote", "get-url", "origin")
     }.standardOutput.asText.get().trim().removeSuffix(".git")

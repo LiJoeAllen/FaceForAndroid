@@ -6,7 +6,7 @@
   与官方 JNI 绑定 [SeetaFace6JNI](https://github.com/SeetaFace6Open/SeetaFace6JNI)
   打包成开箱即用的 Android Library/AAR。上游代码以 git submodule 原样引入、不打补丁，
   所有 NDK/CMake 构建适配都在模块内完成，细节见 [face/sf/README.md](face/sf/README.md)。
-- **`facemirror`（面鉴）**：基于 face-sf 的演示应用，miuix 风格 UI，三个 Tab 覆盖静态
+- **`app`（面鉴）**：基于 face-sf 的演示应用，miuix 风格 UI，三个 Tab 覆盖静态
   检测分析、1:1/1:N 身份比对与实时相机识别。GitHub Release 提供内置模型的 APK 直装包。
 
 ## 功能一览
@@ -22,7 +22,7 @@
 ## 模块结构
 
 ```
-facemirror/            面鉴 App（Kotlin + Compose/miuix）
+app/                   面鉴 App（Kotlin + Compose/miuix）
 face/sf/               face-sf Android 库（AAR，含 JNI/CMake 编排）
 face/sf/third_party/   SeetaFace6 / SeetaFace6JNI 等 submodule（统一指向个人 fork）
 ```
@@ -35,7 +35,7 @@ face/sf/third_party/   SeetaFace6 / SeetaFace6JNI 等 submodule（统一指向�
 
 ```bash
 git submodule update --init --recursive
-./gradlew :facemirror:assembleDebug
+./gradlew :app:assembleDebug
 ```
 
 ## 模型文件
@@ -43,8 +43,8 @@ git submodule update --init --recursive
 SeetaFace6 的 `.csta` 模型（数百 MB 二进制）不进版本库。获取方式见
 [face/sf/README.md](face/sf/README.md)。支持两种放置方式：
 
-- **目录**：`facemirror/src/main/assets/seeta/` 下直接放 `.csta` 文件，首次启动逐个复制；
-- **压缩包**：放一个 `facemirror/src/main/assets/seeta.7z`，首次启动自动解压到应用私有目录。
+- **目录**：`app/src/main/assets/seeta/` 下直接放 `.csta` 文件，首次启动逐个复制；
+- **压缩包**：放一个 `app/src/main/assets/seeta.7z`，首次启动自动解压到应用私有目录。
 
 应用启动时会自动探测 assets 里是目录还是 7z，并在初始化界面显示当前阶段、进度和耗时；
 已安装且压缩包未变化时直接复用，不会重复解压。7z 建议只使用 LZMA2 压缩，不要加密或使用

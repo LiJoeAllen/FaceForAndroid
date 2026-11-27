@@ -11,6 +11,7 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
+import android.os.SystemClock
 import android.util.Log
 import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -228,6 +229,10 @@ internal fun CameraAnalysisPreview(
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
 
+        var statDecodeMs = 0L
+        var statProcessMs = 0L
+        var statFrames = 0
+
         analysis.setAnalyzer(cameraState.executor) { proxy ->
             captured.incrementAndGet()
             if (cameraState.closed.get() || !cameraState.busy.compareAndSet(false, true)) {
@@ -239,19 +244,41 @@ internal fun CameraAnalysisPreview(
                 // 旋转与镜像合并成一次矩阵变换：前置帧做水平镜像，让送入推理的
                 // 画面与用户看到的预览一致；标注和识别都在这张图上进行。
                 // 缩放并入同一次绘制，产出恰好是分析分辨率，下游不再二次缩放。
+                val tDecode0 = SystemClock.elapsedRealtime()
                 val bitmap = proxy.toUprightBitmap(
                     mirror = frontCamera && currentMirrorFront.value,
                     targetWidth = ANALYSIS_W,
                     targetHeight = ANALYSIS_H,
                     extraRotation = currentCameraRotation.value,
                 )
+                val tDecode1 = SystemClock.elapsedRealtime()
                 val processed = process(bitmap)
+                val tProcess1 = SystemClock.elapsedRealtime()
                 annotated = if (currentViewRotation.value % 360 == 0) {
                     processed
                 } else {
                     processed.rotateForPreview(currentViewRotation.value)
                 }
                 rendered.incrementAndGet()
+
+                // 相机侧分段：FrameProfiler 只统计 process 内部，YUV→ARGB、
+                // 旋转/镜像/缩放发生在 process 之前，必须单独量出来才能解释
+                // “分段之和 < 实际帧间隔”的差额。
+                statDecodeMs += tDecode1 - tDecode0
+                statProcessMs += tProcess1 - tDecode1
+                statFrames++
+                if (statFrames >= 50) {
+                    val f = statFrames.toFloat()
+                    Log.i(
+                        TAG,
+                        "相机侧分段(近 $statFrames 帧均值 ms): " +
+                            "转换=${"%.1f".format(statDecodeMs / f)} " +
+                            "分析=${"%.1f".format(statProcessMs / f)}",
+                    )
+                    statDecodeMs = 0
+                    statProcessMs = 0
+                    statFrames = 0
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "帧处理异常 facing=${if (frontCamera) "front" else "back"}", e)
                 onStatus("帧处理失败:${e.message}")

@@ -8,7 +8,7 @@
 
 ### 适用范围
 
-- 适用：自有模块 `:facemirror`、`:face:sf` 的 Kotlin / Java / C/C++ 代码。
+- 适用：自有模块 `:app`、`:face:sf` 的 Kotlin / Java / C/C++ 代码。
 - 不适用：`face/sf/third_party/`（上游 submodule 保持原样，不做注释中文化）。
 
 ### 注释规则

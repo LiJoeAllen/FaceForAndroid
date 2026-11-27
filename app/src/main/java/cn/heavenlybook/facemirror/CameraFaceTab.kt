@@ -4,14 +4,15 @@
 package cn.heavenlybook.facemirror
 
 import android.graphics.Bitmap
-import android.util.Log
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PointF
 import android.graphics.Rect
 import android.graphics.RectF
 import android.os.SystemClock
+import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -27,16 +28,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import cn.heavenlybook.sf.face.Match
 import cn.heavenlybook.sf.face.SeetaFacePipeline
 import cn.heavenlybook.sf.face.SeetaFaceTracker
 import cn.heavenlybook.sf.face.SeetaFrameBuffer
 import cn.heavenlybook.sf.face.TrackedFace
 import com.seeta.sdk.FaceAntiSpoofing
+import com.seeta.sdk.SeetaImageData
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import androidx.core.graphics.scale
 
 /** 同一人两次 1:N 重识别的最小间隔：识别远贵于活体，按人限流保住帧率。 */
@@ -52,6 +59,12 @@ private const val RECOGNIZE_GLOBAL_GAP_MS = 300L
 /** 视频活体隔帧融合：徽标约 2-3 fps 刷新一次，不影响识别节奏。 */
 private const val LIVENESS_EVERY_N_FRAMES = 2
 
+/**
+ * 隔帧跟踪：tracker.track 单帧约 30ms，是相机链路最大开销。每 2 帧跑一次，
+ * 中间帧复用上一帧的框；预览仍逐帧刷新，框更新降到约 15fps。
+ */
+private const val TRACK_EVERY_N_FRAMES = 2L
+
 private const val TAG = "CameraTab"
 
 /** 跟踪框旁渲染的身份信息：名字 + 相似度 + 活体结论 + 人像小图。 */
@@ -60,6 +73,27 @@ private data class CamIdentity(
     val similarity: Float?,
     val spoof: FaceAntiSpoofing.Status?,
     val portrait: Bitmap?,
+)
+
+/**
+ * 异步 1:N 检索请求。image 必须是整帧 BGR 的独立拷贝：相机线程的
+ * [SeetaFrameBuffer] 下一帧就会覆写原缓冲，直接传引用会让检索读到脏数据。
+ */
+private data class SearchRequest(
+    val pid: Int,
+    val version: Long,
+    val image: SeetaImageData,
+    val rect: Rect,
+    val landmarks: List<PointF>,
+    val spoof: FaceAntiSpoofing.Status?,
+)
+
+/** 异步检索结果；由相机线程 drain 后按 pid + version 丢弃过期项。 */
+private data class SearchResult(
+    val pid: Int,
+    val version: Long,
+    val hit: Match?,
+    val spoof: FaceAntiSpoofing.Status?,
 )
 
 /**
@@ -86,6 +120,18 @@ internal fun CameraTab(
     val lastRecognizedAt = remember { ConcurrentHashMap<Int, Long>() }
     val hadFaces = remember { AtomicBoolean(false) }
     val frameCounter = remember { java.util.concurrent.atomic.AtomicLong(0) }
+    // 分析线程独占的跟踪结果缓存：隔帧跟踪时中间帧直接复用，避免同一张脸
+    // 每帧都重新跑检测。用 AtomicReference 只是为了跨重组保留引用。
+    val trackCache = remember { AtomicReference<List<TrackedFace>>(emptyList()) }
+    // 异步 1:N 检索：相机线程只负责拷贝并投递，database.search 在 16MB 栈的
+    // 推理线程池执行。通道容量 1 + DROP_OLDEST：识别跟不上时丢旧请求，
+    // 绝不把过期检索排到实时画面后面。结果由 drainSearchResults 在相机线程
+    // 统一写回 identities，避免 Compose 状态被多线程并发修改。
+    val searchQueue = remember {
+        Channel<SearchRequest>(capacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    }
+    val searchResults = remember { ConcurrentLinkedQueue<SearchResult>() }
+    val recognizeVersion = remember { HashMap<Int, Long>() }
     // 只在分析线程使用：复用 Bitmap→BGR 的中间数组，消除逐帧 GC 压力。
     val frameBuffer = remember { SeetaFrameBuffer() }
     val lastFullRunAt = remember { java.util.concurrent.atomic.AtomicLong(0) }
@@ -96,6 +142,8 @@ internal fun CameraTab(
             minFaceSize = settings.minFaceSize
             videoStable = settings.videoStable
             if (settings.inferThreads > 0) setCalculationThreads(settings.inferThreads)
+        }.also {
+            Log.i(TAG, "相机跟踪策略：每 $TRACK_EVERY_N_FRAMES 帧检测一次，中间帧复用跟踪框")
         }
     }
     DisposableEffect(Unit) {
@@ -141,6 +189,34 @@ internal fun CameraTab(
         onDispose { livePipeline?.close() }
     }
 
+    // 异步检索消费者：固定跑在 16MB 栈的推理线程池上，通过容量 1 的通道
+    // 串行处理最新请求；结果只入队，不直接碰 Compose 状态。
+    LaunchedEffect(Unit) {
+        Log.i(TAG, "异步检索消费者协程已启动（主线程）")
+        withContext(engine.inferenceDispatcher) {
+            Log.i(TAG, "异步 1:N 检索消费者已切到推理线程")
+            for (request in searchQueue) {
+                Log.d(TAG, "开始异步检索 pid=${request.pid} version=${request.version}")
+                val startedAt = SystemClock.elapsedRealtime()
+                val outcome = runCatching {
+                    engine.database.search(request.image, request.rect, request.landmarks)
+                }
+                val costMs = SystemClock.elapsedRealtime() - startedAt
+                // 失败不能当作“未命中”回写，否则一次瞬时异常会把已登记的人
+                // 错误标成“陌生人”；只把成功结果（含真正未命中）交给 UI 线程。
+                outcome.fold(
+                    onSuccess = { hit ->
+                        Log.i(TAG, "异步 1:N 检索完成 pid=${request.pid} 耗时Ms=$costMs 命中=${hit?.index ?: -1L}")
+                        searchResults.add(SearchResult(request.pid, request.version, hit, request.spoof))
+                    },
+                    onFailure = { e ->
+                        Log.e(TAG, "异步 1:N 检索失败 pid=${request.pid} 耗时Ms=$costMs", e)
+                    },
+                )
+            }
+        }
+    }
+
     fun cachedPortrait(index: Long): Bitmap? {
         portraitCache[index]?.let { return it }
         val file = engine.gallery.photo(index)
@@ -151,6 +227,29 @@ internal fun CameraTab(
         }
         if (decoded != null) portraitCache[index] = decoded
         return decoded
+    }
+
+    /**
+     * 在相机线程消费异步检索结果。只接受当前版本；同一 pid 已提交新请求时，
+     * 旧结果直接丢弃，避免“新脸显示旧身份”。
+     */
+    fun drainSearchResults() {
+        while (true) {
+            val result = searchResults.poll() ?: return
+            if (recognizeVersion[result.pid] != result.version) continue
+            val hit = result.hit
+            identities[result.pid] = if (hit != null) {
+                Log.d(TAG, "1:N 命中 pid=${result.pid} index=${hit.index} 相似度=${hit.similarity}")
+                CamIdentity(
+                    label = engine.gallery.name(hit.index),
+                    similarity = hit.similarity,
+                    spoof = result.spoof,
+                    portrait = cachedPortrait(hit.index),
+                )
+            } else {
+                CamIdentity("陌生人", null, result.spoof, null)
+            }
+        }
     }
 
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
@@ -167,6 +266,7 @@ internal fun CameraTab(
                 // CameraX 异常交付的尺寸兜底。tracker 硬绑定构造分辨率,
                 // native 对不匹配的帧直接 abort。
                 val tDecode = SystemClock.elapsedRealtime()
+                val frameNo = frameCounter.incrementAndGet()
                 val normalized = if (frame.width != ANALYSIS_W || frame.height != ANALYSIS_H) {
                     frame.scale(ANALYSIS_W, ANALYSIS_H)
                 } else {
@@ -177,9 +277,20 @@ internal fun CameraTab(
                 val native = frameBuffer.convert(normalized)
                 val live = livePipeline
                 val tTrack0 = SystemClock.elapsedRealtime()
-                val tracked = tracker.track(native)
+                // 隔帧跟踪：缓存为空（画面里还没人）时每帧都检测，保证新面孔
+                // 尽快出现；有框后每 TRACK_EVERY_N_FRAMES 帧更新一次，中间帧
+                // 复用上一帧的框，避免 30ms 的检测把预览拖到 18fps。
+                val cachedTracked = trackCache.get()
+                val tracked = if (
+                    frameNo % TRACK_EVERY_N_FRAMES == 0L || cachedTracked.isEmpty()
+                ) {
+                    tracker.track(native).also { trackCache.set(it) }
+                } else {
+                    cachedTracked
+                }
                 val tTrack1 = SystemClock.elapsedRealtime()
-                val frameNo = frameCounter.incrementAndGet()
+                // 先把上一轮异步检索结果落到 identities，再画当前帧标注。
+                drainSearchResults()
                 val now = SystemClock.elapsedRealtime()
                 if (tracked.isEmpty()) liveSpoof.clear()
                 var liveMs = 0L
@@ -200,7 +311,7 @@ internal fun CameraTab(
                     if (due && now - lastFullRunAt.get() >= RECOGNIZE_GLOBAL_GAP_MS) {
                         lastRecognizedAt[face.pid] = now
                         lastFullRunAt.set(now)
-                        val tSearch0 = SystemClock.elapsedRealtime()
+                        val tFallback0 = SystemClock.elapsedRealtime()
                         // 首选本帧视频活体的产出；静默模式或未轮到融合帧时用
                         // 精简流水线单帧补算；都没有才退回共享全量流水线。
                         val fallback = analyzed ?: live?.let {
@@ -208,24 +319,39 @@ internal fun CameraTab(
                         } ?: synchronized(engine.nativeLock) {
                             engine.pipeline.analyze(native, face.rect)
                         }
+                        // 静默模式的单帧活体仍在相机线程上，计入 live 而不是 search，
+                        // 否则会把异步检索的收益算丢。
+                        if (analyzed == null) {
+                            liveMs += SystemClock.elapsedRealtime() - tFallback0
+                        }
                         val landmarks = fallback?.landmarks
-                        identities[face.pid] = if (fallback != null && landmarks != null) {
-                            val hit = engine.database.search(native, face.rect, landmarks)
-                            searchMs += SystemClock.elapsedRealtime() - tSearch0
-                            if (hit != null) {
-                                Log.d(TAG, "1:N 命中 pid=${face.pid} index=${hit.index} 相似度=${hit.similarity}")
-                                CamIdentity(
-                                    label = engine.gallery.name(hit.index),
-                                    similarity = hit.similarity,
-                                    spoof = fallback.spoof,
-                                    portrait = cachedPortrait(hit.index),
-                                )
-                            } else {
-                                CamIdentity("陌生人", null, fallback.spoof, null)
+                        if (fallback != null && landmarks != null) {
+                            // 异步检索：image 必须拷贝，native 缓冲下一帧就会被覆写。
+                            // version 用于丢弃同一 pid 的旧结果。
+                            val tSubmit0 = SystemClock.elapsedRealtime()
+                            val version = (recognizeVersion[face.pid] ?: 0L) + 1L
+                            recognizeVersion[face.pid] = version
+                            val imageCopy = SeetaImageData(
+                                native.width,
+                                native.height,
+                                native.channels,
+                            ).also { native.data.copyInto(it.data) }
+                            val request = SearchRequest(
+                                pid = face.pid,
+                                version = version,
+                                image = imageCopy,
+                                rect = Rect(face.rect),
+                                landmarks = landmarks,
+                                spoof = fallback.spoof,
+                            )
+                            val accepted = searchQueue.trySend(request).isSuccess
+                            searchMs += SystemClock.elapsedRealtime() - tSubmit0
+                            Log.d(TAG, "提交异步检索 pid=${face.pid} version=$version 队列接受=$accepted")
+                            if (!accepted) {
+                                Log.d(TAG, "异步检索队列未接收 pid=${face.pid}，本帧跳过")
                             }
                         } else {
-                            searchMs += SystemClock.elapsedRealtime() - tSearch0
-                            CamIdentity("无关键点", null, analyzed?.spoof, null)
+                            identities[face.pid] = CamIdentity("无关键点", null, analyzed?.spoof, null)
                         }
                     }
                 }
@@ -298,8 +424,9 @@ private fun spoofLabel(status: FaceAntiSpoofing.Status): String = when (status) 
 
 /**
  * 帧管线分段计时:每 [REPORT_EVERY] 帧向 logcat 输出各阶段均值与有脸帧占比,
- * 用于把"性能差"定位到具体阶段(decode=YUV 解码+缩放+转 BGR,track=检测跟踪,
- * live=视频活体,search=1:N 重识别,annotate=画框)。另统计"框位移"——
+ * 用于把"性能差"定位到具体阶段(decode=整帧 Bitmap→BGR,track=检测跟踪,
+ * live=视频活体,submit=1:N 检索提交(整帧拷贝+入队),annotate=画框)。
+ * 真正的 1:N 检索耗时见异步消费者打印的“异步 1:N 检索完成”日志。另统计"框位移"——
  * 同一人相邻帧跟踪框坐标的平均变化(px),度量画面静止时线框的抖动程度,
  * 用于验证 videoStable 帧间平滑的效果。
  */
@@ -348,7 +475,7 @@ private class FrameProfiler {
                     "decode=${"%.1f".format(total[0] / f)} " +
                     "track=${"%.1f".format(total[1] / f)} " +
                     "live=${"%.1f".format(total[2] / f)} " +
-                    "search=${"%.1f".format(total[3] / f)} " +
+                    "submit=${"%.1f".format(total[3] / f)} " +
                     "annotate=${"%.1f".format(total[4] / f)} " +
                     "有脸帧占比=${(framesWithFace * 100f / frames).toInt()}% " +
                     "框位移=${"%.1f".format(boxDeltaSum / f)}px",

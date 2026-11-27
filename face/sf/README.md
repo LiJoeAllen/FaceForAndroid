@@ -303,10 +303,22 @@ POM 已带 name/description/BSD-2-Clause/SCM；正式上 MavenCentral 还需补�
   bridges 目录的 C++ 导出符号交叉校验（145 项应全部 OK），升级上游后先跑
   `python scripts/check_jni_symbols.py third_party/SeetaFace6JNI src/main/cpp/bridges`。
 - TenniS 的 NEON/SIMD kernel **已禁用**（`TS_USE_NEON/TS_USE_SIMD` 不定义）：
-  NDK 27 下 NEON 路径在真机上堆损坏（depthwise conv / resize 越界写 → 之后任意
-  delete 段错误；与 OpenMP 链接方式、优化级别无关，已逐项排除）。当前走通用
-  C++ kernel，稳定但速度下降。恢复 NEON 需用 NDK r16b 验证或等上游修复。
+  上游向量路径在图像边界会读过 tensor 分配区。真机（NDK 27）已复现两处：
+  `depthwise_3x3_s1` → `simd_neon_def.h:78`，以及排除 depthwise 后的
+  `Pooling2D` → `simd_neon_def.h:275`；都是 `SIGSEGV/SEGV_ACCERR`、读地址在
+  二级分配之后。这是源码级越界，换 NDK 或优化级别不会修好，只能改上游 kernel
+  或等上游修复。当前走通用 C++ kernel，稳定但速度下降。
   同时不要恢复上游 Android.mk 的 `-ffast-math` 系列参数（同样引发堆损坏）。
+- 16 KB page size：NDK r27 默认仍按 4 KB 对齐，`src/main/cpp/CMakeLists.txt`
+  已统一加 `-z,max-page-size=16384` 与 `-z,common-page-size=16384`；APK 端由
+  AGP 保持未压缩 native lib 并做 16 KB zipalign。升级后可用
+  `python scripts/check_16k_alignment.py <apk|aar>` 校验：arm64-v8a 与 x86_64
+  必须全部通过；armeabi-v7a 的 NDK 自带 `libomp.so`/`libc++_shared.so` 仍是
+  4 KB，但 32 位 ABI 不在 Google Play 的 16 KB 要求范围内。
+- **不要直接升 NDK 30**：r30（Clang 21）下 TenniS 的
+  `src/utils/ctxmgr_lite.cpp` 会因 `<cxxabi.h>` 与 libc++ 21 的
+  `__cxa_init_primary_exception` 声明冲突而编译失败，arm64-v8a 与
+  armeabi-v7a 都复现；需要 force-include 兼容头或改上游，暂不建议升级。
 - 源文件清单与链接关系**逐字对照**每个上游模块的
   `<Module>/<Component>/android/jni/Android.mk`（官方 ndk-build 配置），
   而非其桌面 CMakeLists（后者带强制安装路径、find_package 等副作用）。
